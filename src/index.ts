@@ -75,7 +75,7 @@ const userRatingStringLiteral = `
 <button id="add-rating-button" class="btn btn-primary my-3">Noter</button>
 `;
 
-const placeholderList = `
+const placeholderListStringLiteral = `
 <span class="text-muted text-center w-75 m-auto">Déplacez la carte pour afficher les restaurants proches de chez vous.</span>
 `
 
@@ -104,7 +104,7 @@ const resetDOMElements = (empty?: boolean) => {
     ratingsListElement.empty()
     if (empty) {
         $('#restaurants').height(window.innerHeight);
-        restaurantsListElement.append(placeholderList)
+        restaurantsListElement.append(placeholderListStringLiteral)
     } else {
         $('#restaurants').height('100%');
     }
