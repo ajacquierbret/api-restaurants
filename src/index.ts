@@ -6,6 +6,7 @@ import * as $ from 'jquery';
 import * as restaurantsListJSON from '../json/restaurants.json';
 import { Position, Restaurant } from './types/types';
 import { createRestaurantMarker, getRestaurantAverageRating } from './utils/utils';
+import { result } from 'lodash';
 
 const localRestaurantsList = restaurantsListJSON;
 
@@ -55,14 +56,16 @@ const restaurantsImages: {
     image: HTMLImageElement;
 }[] = [];
 
-localRestaurantsList.forEach(restaurant => {
-    restaurantsImages.push({
-        name: restaurant.restaurantName,
-        image: getStreetViewImage({ lat: restaurant.lat, lng: restaurant.long }),
-    })
-});
+const initRestaurantsImages = () => {
+    localRestaurantsList.forEach(restaurant => {
+        restaurantsImages.push({
+            name: restaurant.restaurantName,
+            image: getStreetViewImage({ lat: restaurant.lat, lng: restaurant.long }),
+        })
+    });
+}
 
-
+initRestaurantsImages();
 
 const userRatingStringLiteral = (idSuffix: string) => `
 <div class="form-group mt-5" id="rating-form-${idSuffix}">
@@ -79,7 +82,7 @@ const userRatingStringLiteral = (idSuffix: string) => `
 
 const placeholderListStringLiteral = `
 <span class="text-muted text-center w-75 m-auto">Déplacez la carte pour afficher les restaurants proches de chez vous.</span>
-`
+`;
 
 
 
@@ -146,7 +149,6 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
 }
 
 const findNearestRestaurants = (restaurants: Restaurant[], map: google.maps.Map<Element>) => {
-    console.log(restaurants);
     return restaurants.filter(restaurant => map.getBounds().contains({
         lat: restaurant.lat,
         lng: restaurant.long,
@@ -157,6 +159,7 @@ window.initMap = (): void => {
     if (navigator.geolocation) {
 
         let googleMap: google.maps.Map;
+        let geocoder= new google.maps.Geocoder;
 
         const mapOptions: google.maps.MapOptions = {
             zoom: 15,
@@ -175,6 +178,11 @@ window.initMap = (): void => {
 
         let nearestRestaurants: Restaurant[];
         let restaurantsMarkers: google.maps.Marker[] = [];
+
+        const mapClickLocation = {
+            lat: 0,
+            lng: 0,
+        };
 
         const listenToMarkerInteraction = (marker: google.maps.Marker, restaurant: Restaurant) => {
             marker.addListener('click', () => {
@@ -201,6 +209,34 @@ window.initMap = (): void => {
             })
         }
 
+        const createCustomRestaurant = (geocoder: google.maps.Geocoder) => {
+            geocoder.geocode({ location: mapClickLocation },
+            (
+                results: google.maps.GeocoderResult[],
+                status: google.maps.GeocoderStatus
+            ) => {
+                if (status === 'OK') {
+                    if (results[0]) {
+                        const address = results[0].formatted_address;
+                        const restaurantName = $('#custom-restaurant-form input').val() as string;
+                        const customRestaurant: Omit<Restaurant, 'lat' | 'long' | 'address'> = {
+                            restaurantName,
+                            ratings: [],
+                        };
+                        localRestaurantsList.push({
+                            ...customRestaurant,
+                            address,
+                            lat: mapClickLocation.lat,
+                            long: mapClickLocation.lng,
+                        });
+                        $('#custom-restaurant-modal').modal('toggle');
+                        initRestaurantsImages();
+                        updateRestaurants();
+                    }
+                }
+            })
+        }
+
         // Put restaurants on map
         const fillRestaurantsMarkers = (restaurants: Restaurant[]) => {
             restaurantsMarkers.forEach(marker => {
@@ -211,7 +247,7 @@ window.initMap = (): void => {
                 const marker = createRestaurantMarker({
                     lat: restaurant.lat,
                     lng: restaurant.long,
-                });
+                }, '#eb2f06');
                 restaurantsMarkers.push(marker)
                 listenToMarkerInteraction(marker, restaurant)
             });
@@ -231,8 +267,7 @@ window.initMap = (): void => {
             nearestRestaurants.forEach(restaurant => listenToRatingSubmit(restaurant));
         };
 
-        navigator.geolocation.watchPosition((position) => {
-            // Put user on the map
+        navigator.geolocation.getCurrentPosition((position) => {
             userPosition = {
                 lat: position.coords.latitude,
                 lng: position.coords.longitude,
@@ -241,8 +276,16 @@ window.initMap = (): void => {
                 center: userPosition,
                 ...mapOptions,
             });
-            userPositionDot.setMap(googleMap);
-            userPositionDot.setPosition(userPosition);
+
+            googleMap.addListener('click', (event) => {
+                mapClickLocation.lat = event.latLng.lat();
+                mapClickLocation.lng = event.latLng.lng();
+                $('#custom-restaurant-modal').modal('toggle');
+            });
+
+            $('#add-restaurant-button').on('click', () => {
+                createCustomRestaurant(geocoder);
+            });
 
             // Listen to bounds changes
             googleMap.addListener('bounds_changed', () => {
@@ -258,8 +301,18 @@ window.initMap = (): void => {
                 starFilter.max = $('#max-stars').val() as number;
                 updateRestaurants();
             });
+        });
+
+        navigator.geolocation.watchPosition((position) => {
+            // Put user on the map
+            userPosition = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+            };
+            userPositionDot.setMap(googleMap);
+            userPositionDot.setPosition(userPosition);
         }, error, options);
-  };
+  }
 }
 
 // Main initialization
