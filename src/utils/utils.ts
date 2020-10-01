@@ -24,5 +24,5 @@ export const getRestaurantAverageRating = (ratings: {
     comment: string;
 }[]) => {
     const stars = ratings.map(rating => rating.stars);
-    return stars.reduce((a, b) => a + b) / stars.length
+    return Number((stars.reduce((a, b) => a + b) / stars.length).toFixed(1));
 }

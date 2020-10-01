@@ -7,6 +7,8 @@ import * as restaurantsListJSON from '../json/restaurants.json';
 import { Position, Restaurant } from './types/types';
 import { createRestaurantMarker, getRestaurantAverageRating } from './utils/utils';
 
+const localRestaurantsList = restaurantsListJSON;
+
 //// Google Maps initialization
 
 $('#main-infos').height(window.innerHeight);
@@ -53,7 +55,7 @@ const restaurantsImages: {
     image: HTMLImageElement;
 }[] = [];
 
-restaurantsListJSON.forEach(restaurant => {
+localRestaurantsList.forEach(restaurant => {
     restaurantsImages.push({
         name: restaurant.restaurantName,
         image: getStreetViewImage({ lat: restaurant.lat, lng: restaurant.long }),
@@ -62,8 +64,8 @@ restaurantsListJSON.forEach(restaurant => {
 
 
 
-const userRatingStringLiteral = `
-<div class="form-group mt-5">
+const userRatingStringLiteral = (idSuffix: string) => `
+<div class="form-group mt-5" id="rating-form-${idSuffix}">
   <div class="input-group mb-3">
     <input class="form-control" min="0" max="5" type="number" placeholder="Ma note" />
     <div class="input-group-append">
@@ -72,7 +74,7 @@ const userRatingStringLiteral = `
   </div>
   <textarea class="form-control" type="text" placeholder="Mon avis"></textarea>
 </div>
-<button id="add-rating-button" class="btn btn-primary my-3">Noter</button>
+<button id="add-rating-button-${idSuffix}" class="btn btn-primary my-3">Noter</button>
 `;
 
 const placeholderListStringLiteral = `
@@ -129,7 +131,7 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
             $(`#${restaurant.restaurantName}-tab`).append(`
                 <div class="w-100 mt-5">
                     <div class="row">
-                        <div class="col-3">
+                        <div class="col-4">
                             <h5 style="display: block; text-overflow: ellipsis; white-space: nowrap; overflow: hidden">${rating.stars} / 5</h5>
                         </div>
                         <div class="col">
@@ -139,11 +141,12 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
                 </div>
             `)
         })
-        $(`#${restaurant.restaurantName}-tab`).append(userRatingStringLiteral);
+        $(`#${restaurant.restaurantName}-tab`).append(userRatingStringLiteral(restaurant.restaurantName));
     })
 }
 
 const findNearestRestaurants = (restaurants: Restaurant[], map: google.maps.Map<Element>) => {
+    console.log(restaurants);
     return restaurants.filter(restaurant => map.getBounds().contains({
         lat: restaurant.lat,
         lng: restaurant.long,
@@ -179,6 +182,25 @@ window.initMap = (): void => {
             });
         }
 
+        const listenToRatingSubmit = (restaurant: Pick<Restaurant, 'restaurantName'>) => {
+            $(`#add-rating-button-${restaurant.restaurantName}`).on('click', () => {
+                const stars = Number($(`#rating-form-${restaurant.restaurantName} input`).val());
+                const comment = $(`#rating-form-${restaurant.restaurantName} textarea`).val() as string;
+                const rating = {
+                    stars,
+                    comment,
+                };
+                const targetRestaurant = localRestaurantsList.find(_ => _.restaurantName === restaurant.restaurantName);
+                if (stars && comment.length) {
+                    localRestaurantsList.map(_ => _ === targetRestaurant ? _.ratings.push(rating) : null);
+                    updateRestaurants();
+                    alert('Merci pour votre avis !');
+                } else {
+                    alert("Vous n'avez pas rempli correctement le formulaire");
+                }
+            })
+        }
+
         // Put restaurants on map
         const fillRestaurantsMarkers = (restaurants: Restaurant[]) => {
             restaurantsMarkers.forEach(marker => {
@@ -200,12 +222,13 @@ window.initMap = (): void => {
 
         const updateRestaurants = () => {
             nearestRestaurants = findNearestRestaurants(
-                restaurantsListJSON as Restaurant[],
+                localRestaurantsList as Restaurant[],
                 googleMap,
             );
             resetDOMElements(nearestRestaurants.length === 0);
             fillRestaurantsLists(nearestRestaurants);
             fillRestaurantsMarkers(nearestRestaurants);
+            nearestRestaurants.forEach(restaurant => listenToRatingSubmit(restaurant));
         };
 
         navigator.geolocation.watchPosition((position) => {
