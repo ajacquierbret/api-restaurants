@@ -7,7 +7,7 @@
       "outDir": "./dist/",
       "allowJs": true,
       "declaration": true,
-      "types": ["googlemaps"],
+      "types": ["googlemaps", "markerclustererplus"],
       "resolveJsonModule": true,
       "moduleResolution": "node",
     },

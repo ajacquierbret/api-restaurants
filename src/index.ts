@@ -6,9 +6,8 @@ import * as $ from 'jquery';
 import * as restaurantsListJSON from '../json/restaurants.json';
 import { Position, Restaurant } from './types/types';
 import { createRestaurantMarker, getRestaurantAverageRating } from './utils/utils';
-import { result } from 'lodash';
 
-const localRestaurantsList = restaurantsListJSON;
+let localRestaurantsList = restaurantsListJSON;
 
 //// Google Maps initialization
 
@@ -31,7 +30,7 @@ const error: PositionErrorCallback = () => console.debug("La position n'a pas pu
 let userPosition: Position;
 
 const mapScript = document.createElement('script');
-mapScript.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyCpx26o2E4K28ETHnFC2ufBaVjgKGVU9yo&callback=initMap';
+mapScript.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyCpx26o2E4K28ETHnFC2ufBaVjgKGVU9yo&libraries=geometry,places&callback=initMap';
 mapScript.async = true;
 mapScript.defer = true;
 
@@ -58,8 +57,9 @@ const restaurantsImages: {
 
 const initRestaurantsImages = () => {
     localRestaurantsList.forEach(restaurant => {
+        const restaurantName = restaurant.restaurantName.replace(' ', '-').replace("'", '').toLowerCase();
         restaurantsImages.push({
-            name: restaurant.restaurantName,
+            name: restaurantName,
             image: getStreetViewImage({ lat: restaurant.lat, lng: restaurant.long }),
         })
     });
@@ -117,8 +117,9 @@ const resetDOMElements = (empty?: boolean) => {
 
 const fillRestaurantsLists = (restaurants: Restaurant[]) => {
     restaurants.forEach(restaurant => {
+        const restaurantName = restaurant.restaurantName.slice(0, 10).replace(/ |'|&|,|.|:/g, '-').replace(/à|À/g, 'a').replace(/é|É/g, 'e').replace(/ù/g, 'u').replace(/ê|â|ô|û|î/g, '').toLowerCase();
         restaurantsListElement.append(`
-            <a href="#${restaurant.restaurantName}-tab" class="${restaurantItemClass}" id="${restaurant.restaurantName}-list" data-toggle="list" role="tab">
+            <a href="#${restaurantName}-tab" class="${restaurantItemClass}" id="${restaurantName}-list" data-toggle="list" role="tab">
                 <div class="d-flex justify-content-between">
                     <h5 class="mb-1">${restaurant.restaurantName}</h5>
                     <small>${getRestaurantAverageRating(restaurant.ratings)} / 5</small>
@@ -127,11 +128,15 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
             </a>
         `)
         ratingsListElement.append(`
-            <div class="tab-pane w-75 m-auto fade show" role="tabpanel" aria-labelledby="${restaurant.restaurantName}-list" id="${restaurant.restaurantName}-tab"></div>
+            <div class="tab-pane w-75 m-auto fade show" role="tabpanel" aria-labelledby="${restaurantName}-list" id="${restaurantName}-tab"></div>
         `)
-        $(`#${restaurant.restaurantName}-tab`).append(restaurantsImages.find(el => el.name === restaurant.restaurantName).image);
+        $(`#${restaurantName}-tab`).append(() => {
+            const imgEl = restaurantsImages.find(el => el.name === restaurantName)
+            const placeholder = new Image()
+            return imgEl ? imgEl.image : placeholder;
+        });
         restaurant.ratings.forEach(rating => {
-            $(`#${restaurant.restaurantName}-tab`).append(`
+            $(`#${restaurantName}-tab`).append(`
                 <div class="w-100 mt-5">
                     <div class="row">
                         <div class="col-4">
@@ -144,7 +149,7 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
                 </div>
             `)
         })
-        $(`#${restaurant.restaurantName}-tab`).append(userRatingStringLiteral(restaurant.restaurantName));
+        $(`#${restaurantName}-tab`).append(userRatingStringLiteral(restaurantName));
     })
 }
 
@@ -160,6 +165,7 @@ window.initMap = (): void => {
 
         let googleMap: google.maps.Map;
         let geocoder= new google.maps.Geocoder;
+        let places: google.maps.places.PlacesService
 
         const mapOptions: google.maps.MapOptions = {
             zoom: 15,
@@ -191,14 +197,15 @@ window.initMap = (): void => {
         }
 
         const listenToRatingSubmit = (restaurant: Pick<Restaurant, 'restaurantName'>) => {
-            $(`#add-rating-button-${restaurant.restaurantName}`).on('click', () => {
-                const stars = Number($(`#rating-form-${restaurant.restaurantName} input`).val());
-                const comment = $(`#rating-form-${restaurant.restaurantName} textarea`).val() as string;
+            const restaurantName = restaurant.restaurantName.slice(0, 10).replace(/ |'|&|,|.|:/g, '-').replace(/à|À/g, 'a').replace(/é|É/g, 'e').replace(/ù/g, 'u').replace(/ê|â|ô|û|î/g, '').toLowerCase();
+            $(`#add-rating-button-${restaurantName}`).on('click', () => {
+                const stars = Number($(`#rating-form-${restaurantName} input`).val());
+                const comment = $(`#rating-form-${restaurantName} textarea`).val() as string;
                 const rating = {
                     stars,
                     comment,
                 };
-                const targetRestaurant = localRestaurantsList.find(_ => _.restaurantName === restaurant.restaurantName);
+                const targetRestaurant = localRestaurantsList.find(_ => _.restaurantName === restaurantName);
                 if (stars && comment.length) {
                     localRestaurantsList.map(_ => _ === targetRestaurant ? _.ratings.push(rating) : null);
                     updateRestaurants();
@@ -244,21 +251,69 @@ window.initMap = (): void => {
             });
             restaurantsMarkers = [];
             restaurants.forEach(restaurant => {
-                const marker = createRestaurantMarker({
-                    lat: restaurant.lat,
-                    lng: restaurant.long,
-                }, '#eb2f06');
+                const marker = new google.maps.Marker({
+                    clickable: true,
+                    position: {
+                        lat: restaurant.lat,
+                        lng: restaurant.long,
+                    },
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 7,
+                        fillOpacity: 1,
+                        strokeWeight: 2,
+                        fillColor: '#e74c3c',
+                        strokeColor: '#FFFFFF',
+                    },
+                })
+                marker.setMap(googleMap);
                 restaurantsMarkers.push(marker)
                 listenToMarkerInteraction(marker, restaurant)
             });
-            restaurantsMarkers.forEach(marker => {
-                marker.setMap(googleMap)
-            });
         };
 
+        const getPlaces = () => {
+            const bounds = googleMap.getBounds();
+            const center = googleMap.getCenter();
+            places = new google.maps.places.PlacesService(googleMap);
+            const ne = bounds.getSouthWest();
+            const radius = google.maps.geometry.spherical.computeDistanceBetween(center, ne);
+            const request: google.maps.places.PlaceSearchRequest = {
+                location: center,
+                bounds,
+                radius,
+                type: 'restaurant',
+            }
+
+            places.nearbySearch(request, (res) => {
+                if (res) {
+                    const foundRestaurants = res.map(restaurant => {
+                        const formatedRestaurant: Restaurant = {
+                            restaurantName: restaurant.name,
+                            address: restaurant.formatted_address,
+                            lat: restaurant.geometry.location.lat(),
+                            long: restaurant.geometry.location.lng(),
+                            ratings: restaurant.reviews ? restaurant.reviews.map(review => {
+                                return {
+                                    stars: review.rating,
+                                    comment: review.text,
+                                }
+                            }) : [],
+                        };
+                        return formatedRestaurant
+                    });
+                    localRestaurantsList = foundRestaurants
+                    initRestaurantsImages();
+                }
+            })
+
+            return localRestaurantsList;
+        }
+
         const updateRestaurants = () => {
+            const restaurantsList = getPlaces();
             nearestRestaurants = findNearestRestaurants(
-                localRestaurantsList as Restaurant[],
+                restaurantsList as Restaurant[],
                 googleMap,
             );
             resetDOMElements(nearestRestaurants.length === 0);
@@ -288,7 +343,8 @@ window.initMap = (): void => {
             });
 
             // Listen to bounds changes
-            googleMap.addListener('bounds_changed', () => {
+            //@ts-ignore
+            googleMap.addListener('bounds_changed', (e) => {
                 updateRestaurants()
             });
 
@@ -301,6 +357,8 @@ window.initMap = (): void => {
                 starFilter.max = $('#max-stars').val() as number;
                 updateRestaurants();
             });
+
+            updateRestaurants();
         });
 
         navigator.geolocation.watchPosition((position) => {
