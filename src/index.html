@@ -9,27 +9,36 @@
 <title>API Restaurants</title>
 </head>
 <body>
-  <div class="container">
-    <div class="row">
+  <div class="container-fluid w-75 overflow-hidden" id="main" style="padding: 0">
+    <div class="row justify-content-center" id="filters">
       <div class="col-6">
-        <h5>Filtrer les restaurants par note moyenne : </h5>
-      </div>
-      <div class="col-6">
-        <span>Entre : </span>
-        <input type="number" value="3" max="5" min="1" placeholder="3" id="min-stars" />
-        <span>Et : </span>
-        <input type="number" value="5" max="5" min="1" placeholder="5" id="max-stars" />
+        <div class="input-group">
+          <div class="input-group-prepend">
+            <span class="input-group-text">Filtrer les restaurants par note moyenne :</span>
+          </div>
+          <div class="input-group-prepend">
+            <span class="input-group-text">Entre</span>
+          </div>
+          <input name="min-stars" class="form-control" type="number" value="3" max="5" min="1" placeholder="3" id="min-stars" />
+          <div class="input-group-prepend">
+            <span class="input-group-text">Et</span>
+          </div>
+          <input class="form-control" type="number" value="5" max="5" min="1" placeholder="5" id="max-stars" />
+        </div>
       </div>
     </div>
     <div class="row justify-content-center">
-      <div class="col-6">
-        <div id="map"></div>
-      </div>
-      <div class="col-3">
+      <div class="h-100 w-100" id="map"></div>
+    </div>
+  </div>
+  <div class="container-fluid w-25 float-right" id="main-infos">
+    <div class="row justify-content-center">
+      <div class="col-12">
         <div class="list-group" id="restaurants" role="tablist"></div>
-        <div class="mt-5" id="streetview"></div>
       </div>
-      <div class="col-3">
+    </div>
+    <div class="row justify-content-center">
+      <div class="col-12 text-center justify-content-center">
         <div class="tab-content" id="ratings"></div>
       </div>
     </div>
