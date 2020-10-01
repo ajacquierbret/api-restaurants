@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+      "target": "ES6",
+      "module": "CommonJS",
+      "downlevelIteration": true,
+      "sourceMap": true,
+      "outDir": "./dist/",
+      "allowJs": true,
+      "declaration": true,
+      "types": ["googlemaps"],
+      "resolveJsonModule": true,
+      "moduleResolution": "node",
+    },
+    "files": ["./src/index.ts", "import-png.d.ts", "import-json.d.ts"],
+    "compileOnSave": true,
+  }
