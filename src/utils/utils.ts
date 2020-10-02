@@ -27,3 +27,15 @@ export const getRestaurantAverageRating = (ratings: {
     if (stars.length) return Number((stars.reduce((a, b) => a + b) / stars.length).toFixed(1));
     else return 0;
 }
+
+export const getValidRestaurantNameId = (name: string) =>
+    name.replace(/^[a-zA-Z0-9!@#\$%\^\&*\)\(+=._-]+$/g, '')
+    .replace(/ /g, '-')
+    .replace(/'/g, '')
+    .replace(/,/g, '-')
+    .replace(/:|"/g, '')
+    .replace(/&/g, 'et')
+    .replace(/[(]|[)]/g, '')
+    .replace(/[...]/g, '')
+    .replace(/[|]/g, '')
+    .toLowerCase();

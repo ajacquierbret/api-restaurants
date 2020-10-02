@@ -5,13 +5,13 @@ import * as _ from 'lodash';
 import * as $ from 'jquery';
 import * as restaurantsListJSON from '../json/restaurants.json';
 import { Position, Restaurant } from './types/types';
-import { createRestaurantMarker, getRestaurantAverageRating } from './utils/utils';
+import { getValidRestaurantNameId, getRestaurantAverageRating } from './utils/utils';
 
-let localRestaurantsList = restaurantsListJSON;
+let localRestaurantsList: Restaurant[] = restaurantsListJSON;
 
 //// Google Maps initialization
 
-$('#main-infos').height(window.innerHeight);
+$('.main-infos').height(window.innerHeight);
 $('#restaurants').height(window.innerHeight);
 
 declare global {
@@ -57,7 +57,7 @@ const restaurantsImages: {
 
 const initRestaurantsImages = () => {
     localRestaurantsList.forEach(restaurant => {
-        const restaurantName = restaurant.restaurantName.replace(' ', '-').replace("'", '').toLowerCase();
+        const restaurantName = getValidRestaurantNameId(restaurant.restaurantName);
         restaurantsImages.push({
             name: restaurantName,
             image: getStreetViewImage({ lat: restaurant.lat, lng: restaurant.long }),
@@ -84,6 +84,12 @@ const placeholderListStringLiteral = `
 <span class="text-muted text-center w-75 m-auto">Déplacez la carte pour afficher les restaurants proches de chez vous.</span>
 `;
 
+const placeholderTabStringLiteral = `
+<div class="col-12 text-center">
+<span class="text-muted text-center w-75 tabs-info">Cliquez sur un restaurant affiché sur la carte ou à droite pour afficher plus d'informations.</span>
+<div>
+`
+
 
 
 //// Filters handling
@@ -106,7 +112,9 @@ const restaurantItemClass = 'list-group-item ' + 'list-group-item-action ' + 'fl
 
 const resetDOMElements = (empty?: boolean) => {
     restaurantsListElement.empty();
-    ratingsListElement.empty()
+    ratingsListElement.empty();
+    ratingsListElement.parent().children('div').find('.tabs-info').empty()
+    // ratingsListElement.parent().append(placeholderTabStringLiteral)
     if (empty) {
         $('#restaurants').height(window.innerHeight);
         restaurantsListElement.append(placeholderListStringLiteral)
@@ -117,7 +125,7 @@ const resetDOMElements = (empty?: boolean) => {
 
 const fillRestaurantsLists = (restaurants: Restaurant[]) => {
     restaurants.forEach(restaurant => {
-        const restaurantName = restaurant.restaurantName.slice(0, 10).replace(/ |'|&|,|.|:/g, '-').replace(/à|À/g, 'a').replace(/é|É/g, 'e').replace(/ù/g, 'u').replace(/ê|â|ô|û|î/g, '').toLowerCase();
+        const restaurantName = getValidRestaurantNameId(restaurant.restaurantName);
         restaurantsListElement.append(`
             <a href="#${restaurantName}-tab" class="${restaurantItemClass}" id="${restaurantName}-list" data-toggle="list" role="tab">
                 <div class="d-flex justify-content-between">
@@ -137,7 +145,7 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
         });
         restaurant.ratings.forEach(rating => {
             $(`#${restaurantName}-tab`).append(`
-                <div class="w-100 mt-5">
+                <div class="w-100 h-100 mt-5">
                     <div class="row">
                         <div class="col-4">
                             <h5 style="display: block; text-overflow: ellipsis; white-space: nowrap; overflow: hidden">${rating.stars} / 5</h5>
@@ -154,18 +162,27 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
 }
 
 const findNearestRestaurants = (restaurants: Restaurant[], map: google.maps.Map<Element>) => {
-    return restaurants.filter(restaurant => map.getBounds().contains({
+    const nearestRestaurants = restaurants.filter(restaurant => map.getBounds().contains({
         lat: restaurant.lat,
         lng: restaurant.long,
     }) && isBetweenFilters(getRestaurantAverageRating(restaurant.ratings)))
+    const filteredRestaurants = nearestRestaurants.reduce((acc, current) => {
+        const x = acc.find(restaurant => restaurant.address === current.address);
+        if (!x) {
+          return acc.concat([current]);
+        } else {
+          return acc;
+        }
+      }, []);
+    return filteredRestaurants;
 }
 
 window.initMap = (): void => {
     if (navigator.geolocation) {
 
         let googleMap: google.maps.Map;
-        let geocoder= new google.maps.Geocoder;
-        let places: google.maps.places.PlacesService
+        let geocoder = new google.maps.Geocoder;
+        let service: google.maps.places.PlacesService
 
         const mapOptions: google.maps.MapOptions = {
             zoom: 15,
@@ -191,13 +208,19 @@ window.initMap = (): void => {
         };
 
         const listenToMarkerInteraction = (marker: google.maps.Marker, restaurant: Restaurant) => {
+            const restaurantName = getValidRestaurantNameId(restaurant.restaurantName);
+            const infowindow = new google.maps.InfoWindow({
+                content: restaurant.restaurantName
+            })
             marker.addListener('click', () => {
-                $(`#${restaurant.restaurantName}-list`).tab('show')
+                $(`#${restaurantName}-list`).tab('show')
+                ratingsListElement.parent().children('div').find('.tabs-info').empty()
+                infowindow.open(googleMap, marker);
             });
         }
 
         const listenToRatingSubmit = (restaurant: Pick<Restaurant, 'restaurantName'>) => {
-            const restaurantName = restaurant.restaurantName.slice(0, 10).replace(/ |'|&|,|.|:/g, '-').replace(/à|À/g, 'a').replace(/é|É/g, 'e').replace(/ù/g, 'u').replace(/ê|â|ô|û|î/g, '').toLowerCase();
+            const restaurantName = getValidRestaurantNameId(restaurant.restaurantName);
             $(`#add-rating-button-${restaurantName}`).on('click', () => {
                 const stars = Number($(`#rating-form-${restaurantName} input`).val());
                 const comment = $(`#rating-form-${restaurantName} textarea`).val() as string;
@@ -205,10 +228,10 @@ window.initMap = (): void => {
                     stars,
                     comment,
                 };
-                const targetRestaurant = localRestaurantsList.find(_ => _.restaurantName === restaurantName);
+                const targetRestaurant = localRestaurantsList.find(_ => _.restaurantName === restaurant.restaurantName);
                 if (stars && comment.length) {
                     localRestaurantsList.map(_ => _ === targetRestaurant ? _.ratings.push(rating) : null);
-                    updateRestaurants();
+                    getPlaces()
                     alert('Merci pour votre avis !');
                 } else {
                     alert("Vous n'avez pas rempli correctement le formulaire");
@@ -238,7 +261,7 @@ window.initMap = (): void => {
                         });
                         $('#custom-restaurant-modal').modal('toggle');
                         initRestaurantsImages();
-                        updateRestaurants();
+                        getPlaces()
                     }
                 }
             })
@@ -246,74 +269,97 @@ window.initMap = (): void => {
 
         // Put restaurants on map
         const fillRestaurantsMarkers = (restaurants: Restaurant[]) => {
+            const restaurantAlreadyHasAMarker = (restaurant: Restaurant) => {
+                return restaurantsMarkers.find(marker => marker.getPosition().lat() === restaurant.lat && marker.getPosition().lng() === restaurant.long)
+            }
             restaurantsMarkers.forEach(marker => {
                 marker.setMap(null)
             });
             restaurantsMarkers = [];
             restaurants.forEach(restaurant => {
-                const marker = new google.maps.Marker({
-                    clickable: true,
-                    position: {
-                        lat: restaurant.lat,
-                        lng: restaurant.long,
-                    },
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 7,
-                        fillOpacity: 1,
-                        strokeWeight: 2,
-                        fillColor: '#e74c3c',
-                        strokeColor: '#FFFFFF',
-                    },
-                })
-                marker.setMap(googleMap);
-                restaurantsMarkers.push(marker)
-                listenToMarkerInteraction(marker, restaurant)
+                if (!restaurantAlreadyHasAMarker(restaurant)) {
+                    const marker = new google.maps.Marker({
+                        clickable: true,
+                        position: {
+                            lat: restaurant.lat,
+                            lng: restaurant.long,
+                        },
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 7,
+                            fillOpacity: 1,
+                            strokeWeight: 2,
+                            fillColor: '#e74c3c',
+                            strokeColor: '#FFFFFF',
+                        },
+                    })
+                    marker.setMap(googleMap);
+                    restaurantsMarkers.push(marker);
+                    listenToMarkerInteraction(marker, restaurant);
+                }
             });
         };
 
         const getPlaces = () => {
             const bounds = googleMap.getBounds();
-            const center = googleMap.getCenter();
-            places = new google.maps.places.PlacesService(googleMap);
-            const ne = bounds.getSouthWest();
-            const radius = google.maps.geometry.spherical.computeDistanceBetween(center, ne);
+            const center = bounds.getCenter();
+            const ne = bounds.getNorthEast();
+
+            // r = radius of the earth in statute miles
+            const r = 3963.0;  
+
+            // Convert lat or lng from decimal degrees into radians (divide by 57.2958)
+            const lat1 = center.lat() / 57.2958; 
+            const lon1 = center.lng() / 57.2958;
+            const lat2 = ne.lat() / 57.2958;
+            const lon2 = ne.lng() / 57.2958;
+
+            // distance = circle radius from center to Northeast corner of bounds
+            const dis = r * Math.acos(Math.sin(lat1) * Math.sin(lat2) + 
+            Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1));
+
             const request: google.maps.places.PlaceSearchRequest = {
                 location: center,
                 bounds,
-                radius,
+                radius: dis,
                 type: 'restaurant',
             }
 
-            places.nearbySearch(request, (res) => {
+            service.nearbySearch(request, (res) => {
                 if (res) {
-                    const foundRestaurants = res.map(restaurant => {
-                        const formatedRestaurant: Restaurant = {
-                            restaurantName: restaurant.name,
-                            address: restaurant.formatted_address,
-                            lat: restaurant.geometry.location.lat(),
-                            long: restaurant.geometry.location.lng(),
-                            ratings: restaurant.reviews ? restaurant.reviews.map(review => {
-                                return {
-                                    stars: review.rating,
-                                    comment: review.text,
+                    res.map(restaurant => {
+                        service.getDetails({ placeId: restaurant.place_id }, (details) => {
+                            if (details) {
+                                const formatedRestaurant: Restaurant = {
+                                    restaurantName: details.name,
+                                    address: details.formatted_address,
+                                    lat: details.geometry.location.lat(),
+                                    long: details.geometry.location.lng(),
+                                    ratings: details.reviews ? details.reviews.map(review => {
+                                        return {
+                                            stars: review.rating,
+                                            comment: review.text,
+                                        }
+                                    }) : [],
+                                };
+                                const addPlaceRestaurant = (restaurant: Restaurant) => {
+                                    if (!localRestaurantsList.find(_ => _ === restaurant)) {
+                                        localRestaurantsList.push(restaurant)
+                                    }
                                 }
-                            }) : [],
-                        };
-                        return formatedRestaurant
-                    });
-                    localRestaurantsList = foundRestaurants
-                    initRestaurantsImages();
+                                addPlaceRestaurant(formatedRestaurant);
+                                initRestaurantsImages();
+                                updateRestaurants();
+                            }
+                        })
+                    })
                 }
             })
-
-            return localRestaurantsList;
         }
 
         const updateRestaurants = () => {
-            const restaurantsList = getPlaces();
             nearestRestaurants = findNearestRestaurants(
-                restaurantsList as Restaurant[],
+                localRestaurantsList,
                 googleMap,
             );
             resetDOMElements(nearestRestaurants.length === 0);
@@ -332,6 +378,8 @@ window.initMap = (): void => {
                 ...mapOptions,
             });
 
+            service = new google.maps.places.PlacesService(googleMap);
+
             googleMap.addListener('click', (event) => {
                 mapClickLocation.lat = event.latLng.lat();
                 mapClickLocation.lng = event.latLng.lng();
@@ -343,22 +391,21 @@ window.initMap = (): void => {
             });
 
             // Listen to bounds changes
-            //@ts-ignore
-            googleMap.addListener('bounds_changed', (e) => {
-                updateRestaurants()
+            googleMap.addListener('idle', () => {
+                updateRestaurants();
+                getPlaces();
             });
 
             // Listen to filters change
             $('#min-stars').on('change', () => {
                 starFilter.min = $('#min-stars').val() as number;
-                updateRestaurants();
+                getPlaces()
             });
             $('#max-stars').on('change', () => {
                 starFilter.max = $('#max-stars').val() as number;
-                updateRestaurants();
+                getPlaces()
             });
 
-            updateRestaurants();
         });
 
         navigator.geolocation.watchPosition((position) => {
