@@ -4,7 +4,7 @@ body {
     overflow: hidden;
 }
 
-img {
+.main-infos img {
     margin-top: 50px;
     border-radius: 10px;
     -webkit-border-radius: 10px;
@@ -32,10 +32,16 @@ img {
 
 #filters {
     position: absolute;
-    left: 0;
-    top: 0;
+    left: 50px;
+    top: 11px;
+    width: inherit;
+    margin: auto;
     right: 0;
     z-index: 3;
+}
+
+#filters .col-12 {
+    padding: 0;
 }
 
 #map {
