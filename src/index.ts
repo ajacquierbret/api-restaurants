@@ -113,8 +113,9 @@ const restaurantItemClass = 'list-group-item ' + 'list-group-item-action ' + 'fl
 const resetDOMElements = (empty?: boolean) => {
     restaurantsListElement.empty();
     ratingsListElement.empty();
-    ratingsListElement.parent().children('div').find('.tabs-info').empty()
-    // ratingsListElement.parent().append(placeholderTabStringLiteral)
+    $('#ratings-container').removeClass('d-block');
+    $('#ratings-container').addClass('d-flex');
+    ratingsListElement.append(placeholderTabStringLiteral)
     if (empty) {
         $('#restaurants').height(window.innerHeight);
         restaurantsListElement.append(placeholderListStringLiteral)
@@ -129,7 +130,7 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
         restaurantsListElement.append(`
             <a href="#${restaurantName}-tab" class="${restaurantItemClass}" id="${restaurantName}-list" data-toggle="list" role="tab">
                 <div class="d-flex justify-content-between">
-                    <h5 class="mb-1">${restaurant.restaurantName}</h5>
+                    <h5 class="mb-1 w-75">${restaurant.restaurantName}</h5>
                     <small>${getRestaurantAverageRating(restaurant.ratings)} / 5</small>
                 </div>
                 <small>${restaurant.address}</small>
@@ -145,17 +146,25 @@ const fillRestaurantsLists = (restaurants: Restaurant[]) => {
         });
         restaurant.ratings.forEach(rating => {
             $(`#${restaurantName}-tab`).append(`
-                <div class="w-100 h-100 mt-5">
+                <div class="mt-5">
                     <div class="row">
-                        <div class="col-4">
-                            <h5 style="display: block; text-overflow: ellipsis; white-space: nowrap; overflow: hidden">${rating.stars} / 5</h5>
+                        <div class="col-12">
+                            <h5>${rating.stars} / 5</h5>
                         </div>
-                        <div class="col">
-                            <p class="text-muted">${rating.comment}</p>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <p class="text-muted">"${rating.comment}"</p>
                         </div>
                     </div>
                 </div>
+                <hr>
             `)
+            $(`#${restaurantName}-list`).on('show.bs.tab', () => {
+                ratingsListElement.children('div').find('.tabs-info').empty()
+                $('#ratings-container').removeClass('d-flex');
+                $('#ratings-container').addClass('d-block');
+            })
         })
         $(`#${restaurantName}-tab`).append(userRatingStringLiteral(restaurantName));
     })
@@ -399,11 +408,13 @@ window.initMap = (): void => {
             // Listen to filters change
             $('#min-stars').on('change', () => {
                 starFilter.min = $('#min-stars').val() as number;
-                getPlaces()
+                updateRestaurants();
+                getPlaces();
             });
             $('#max-stars').on('change', () => {
                 starFilter.max = $('#max-stars').val() as number;
-                getPlaces()
+                updateRestaurants();
+                getPlaces();
             });
 
         });
